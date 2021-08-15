@@ -9,9 +9,9 @@ import bwr.ReflectionDriver;
 
 public class TestReflection {
 
-    private static Field getField(Class<?> cls, String fieldName) {
+    private static Field getField(final Class<?> cls, final String fieldName) {
         for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
-            for (Field declaredField : ReflectionDriver.getDeclaredFields(c)) {
+            for (final Field declaredField : ReflectionDriver.getDeclaredFields(c)) {
                 if (declaredField.getName().equals(fieldName)) {
                     return declaredField;
                 }
@@ -20,9 +20,9 @@ public class TestReflection {
         throw new IllegalArgumentException("Field " + fieldName + " not found in class " + cls.getName());
     }
 
-    private static Method getMethod(Class<?> cls, String methodName, Class<?>... paramTypes) {
+    private static Method getMethod(final Class<?> cls, final String methodName, final Class<?>... paramTypes) {
         for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
-            for (Method declaredMethod : ReflectionDriver.getDeclaredMethods(c)) {
+            for (final Method declaredMethod : ReflectionDriver.getDeclaredMethods(c)) {
                 if (declaredMethod.getName().equals(methodName)
                         && Arrays.equals(declaredMethod.getParameterTypes(), paramTypes)) {
                     return declaredMethod;
@@ -32,16 +32,17 @@ public class TestReflection {
         throw new IllegalArgumentException("Method " + methodName + " not found in class " + cls.getName());
     }
 
-    public static void main(String[] args) {
-        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-        Field ucpField = getField(classLoader.getClass(), "ucp");
+    public static void main(final String[] args) {
+        final ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        final Field ucpField = getField(classLoader.getClass(), "ucp");
         ReflectionDriver.setAccessible(ucpField, true);
-        Object ucp = ReflectionDriver.getFieldValue(classLoader, ucpField);
-        if (ucp != null) {
-            Method method = getMethod(ucp.getClass(), "getURLs");
-            URL[] urls = (URL[]) ReflectionDriver.invoke(method, ucp, new Object[0]);
-            System.out.println(Arrays.toString(urls));
+        final Object ucp = ReflectionDriver.getFieldValue(classLoader, ucpField);
+        if (ucp == null) {
+            throw new IllegalArgumentException("ucp field is null");
         }
+        final Method method = getMethod(ucp.getClass(), "getURLs");
+        final URL[] urls = (URL[]) ReflectionDriver.invoke(method, ucp, new Object[0]);
+        System.out.println(Arrays.toString(urls));
     }
 
 }
