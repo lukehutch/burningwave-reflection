@@ -33,7 +33,6 @@
 package bwr;
 
 import java.io.ByteArrayOutputStream;
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandle;
@@ -54,33 +53,31 @@ import java.util.logging.Logger;
 
 import sun.misc.Unsafe;
 
-/**
- * @since 8.12.4
- */
 @SuppressWarnings("all")
-public class ReflectionDriver implements Closeable {
-    Unsafe unsafe;
-    Runnable illegalAccessLoggerEnabler;
-    Runnable illegalAccessLoggerDisabler;
+public class ReflectionDriver {
+    static Unsafe unsafe;
+    static Runnable illegalAccessLoggerEnabler;
+    static Runnable illegalAccessLoggerDisabler;
 
-    MethodHandle getDeclaredFieldsRetriever;
-    MethodHandle getDeclaredMethodsRetriever;
-    MethodHandle getDeclaredConstructorsRetriever;
-    MethodHandle methodInvoker;
-    MethodHandle constructorInvoker;
-    BiConsumer<AccessibleObject, Boolean> accessibleSetter;
-    Function<Class<?>, MethodHandles.Lookup> consulterRetriever;
-    TriFunction<ClassLoader, Object, String, Package> packageRetriever;
+    static MethodHandle getDeclaredFieldsRetriever;
+    static MethodHandle getDeclaredMethodsRetriever;
+    static MethodHandle getDeclaredConstructorsRetriever;
+    static MethodHandle methodInvoker;
+    static MethodHandle constructorInvoker;
+    static BiConsumer<AccessibleObject, Boolean> accessibleSetter;
+    static Function<Class<?>, MethodHandles.Lookup> consulterRetriever;
+    static TriFunction<ClassLoader, Object, String, Package> packageRetriever;
 
-    Long loadedPackagesMapMemoryOffset;
-    Long loadedClassesVectorMemoryOffset;
+    static Long loadedPackagesMapMemoryOffset;
+    static Long loadedClassesVectorMemoryOffset;
 
-    Class<?> classLoaderDelegateClass;
-    Class<?> builtinClassLoaderClass;
+    static Class<?> classLoaderDelegateClass;
+    static Class<?> builtinClassLoaderClass;
 
     private static final Logger logger = Logger.getLogger(ReflectionDriver.class.getName());
 
     private static final int jvmMajorVersion;
+
     static {
         String jvmVersionStr = System.getProperty("java.version");
         int startIdx = 0;
@@ -104,34 +101,28 @@ public class ReflectionDriver implements Closeable {
             // Ignore
         }
         jvmMajorVersion = majorVersion;
+
+        Initializer.build();
     }
 
     @FunctionalInterface
-    public interface TriFunction<P0, P1, P2, R> {
+    public static interface TriFunction<P0, P1, P2, R> {
         R apply(P0 p0, P1 p1, P2 p2);
     }
 
-    private ReflectionDriver() {
-        Initializer.build(this);
-    }
-
-    public static ReflectionDriver create() {
-        return new ReflectionDriver();
-    }
-
-    public void disableIllegalAccessLogger() {
+    public static void disableIllegalAccessLogger() {
         if (illegalAccessLoggerDisabler != null) {
             illegalAccessLoggerDisabler.run();
         }
     }
 
-    public void enableIllegalAccessLogger() {
+    public static void enableIllegalAccessLogger() {
         if (illegalAccessLoggerEnabler != null) {
             illegalAccessLoggerEnabler.run();
         }
     }
 
-    public void setAccessible(final AccessibleObject object, final boolean flag) {
+    public static void setAccessible(final AccessibleObject object, final boolean flag) {
         try {
             accessibleSetter.accept(object, flag);
         } catch (final Throwable exc) {
@@ -139,45 +130,46 @@ public class ReflectionDriver implements Closeable {
         }
     }
 
-    public Class<?> defineAnonymousClass(final Class<?> outerClass, final byte[] byteCode, final Object[] var3) {
+    public static Class<?> defineAnonymousClass(final Class<?> outerClass, final byte[] byteCode,
+            final Object[] var3) {
         return unsafe.defineAnonymousClass(outerClass, byteCode, var3);
     }
 
-    public Package retrieveLoadedPackage(final ClassLoader classLoader, final Object packageToFind,
+    public static Package retrieveLoadedPackage(final ClassLoader classLoader, final Object packageToFind,
             final String packageName) throws Throwable {
         return packageRetriever.apply(classLoader, packageToFind, packageName);
     }
 
-    public Collection<Class<?>> retrieveLoadedClasses(final ClassLoader classLoader) {
+    public static Collection<Class<?>> retrieveLoadedClasses(final ClassLoader classLoader) {
         return (Collection<Class<?>>) unsafe.getObject(classLoader, loadedClassesVectorMemoryOffset);
     }
 
-    public Map<String, ?> retrieveLoadedPackages(final ClassLoader classLoader) {
+    public static Map<String, ?> retrieveLoadedPackages(final ClassLoader classLoader) {
         return (Map<String, ?>) unsafe.getObject(classLoader, loadedPackagesMapMemoryOffset);
     }
 
-    public boolean isBuiltinClassLoader(final ClassLoader classLoader) {
+    public static boolean isBuiltinClassLoader(final ClassLoader classLoader) {
         return builtinClassLoaderClass != null && builtinClassLoaderClass.isAssignableFrom(classLoader.getClass());
     }
 
-    public boolean isClassLoaderDelegate(final ClassLoader classLoader) {
+    public static boolean isClassLoaderDelegate(final ClassLoader classLoader) {
         return classLoaderDelegateClass != null
                 && classLoaderDelegateClass.isAssignableFrom(classLoader.getClass());
     }
 
-    public Class<?> getBuiltinClassLoaderClass() {
+    public static Class<?> getBuiltinClassLoaderClass() {
         return builtinClassLoaderClass;
     }
 
-    public Class getClassLoaderDelegateClass() {
+    public static Class getClassLoaderDelegateClass() {
         return classLoaderDelegateClass;
     }
 
-    public Lookup getConsulter(final Class<?> cls) {
+    public static Lookup getConsulter(final Class<?> cls) {
         return consulterRetriever.apply(cls);
     }
 
-    public Object invoke(final Method method, final Object target, final Object[] params) {
+    public static Object invoke(final Method method, final Object target, final Object[] params) {
         try {
             return methodInvoker.invoke(method, target, params);
         } catch (final Throwable exc) {
@@ -185,7 +177,7 @@ public class ReflectionDriver implements Closeable {
         }
     }
 
-    public <T> T newInstance(final Constructor<T> ctor, final Object[] params) {
+    public static <T> T newInstance(final Constructor<T> ctor, final Object[] params) {
         try {
             return (T) constructorInvoker.invoke(ctor, params);
         } catch (final Throwable exc) {
@@ -193,7 +185,7 @@ public class ReflectionDriver implements Closeable {
         }
     }
 
-    public Field getDeclaredField(final Class<?> cls, final String name) {
+    public static Field getDeclaredField(final Class<?> cls, final String name) {
         for (final Field field : getDeclaredFields(cls)) {
             if (field.getName().equals(name)) {
                 return field;
@@ -202,7 +194,7 @@ public class ReflectionDriver implements Closeable {
         return null;
     }
 
-    public Field[] getDeclaredFields(final Class<?> cls) {
+    public static Field[] getDeclaredFields(final Class<?> cls) {
         try {
             return (Field[]) getDeclaredFieldsRetriever.invoke(cls, false);
         } catch (final Throwable exc) {
@@ -210,7 +202,7 @@ public class ReflectionDriver implements Closeable {
         }
     }
 
-    public <T> Constructor<T>[] getDeclaredConstructors(final Class<T> cls) {
+    public static <T> Constructor<T>[] getDeclaredConstructors(final Class<T> cls) {
         try {
             return (Constructor<T>[]) getDeclaredConstructorsRetriever.invoke(cls, false);
         } catch (final Throwable exc) {
@@ -218,7 +210,7 @@ public class ReflectionDriver implements Closeable {
         }
     }
 
-    public Method[] getDeclaredMethods(final Class<?> cls) {
+    public static Method[] getDeclaredMethods(final Class<?> cls) {
         try {
             return (Method[]) getDeclaredMethodsRetriever.invoke(cls, false);
         } catch (final Throwable exc) {
@@ -226,7 +218,7 @@ public class ReflectionDriver implements Closeable {
         }
     }
 
-    public <T> T getFieldValue(Object target, final Field field) {
+    public static <T> T getFieldValue(Object target, final Field field) {
         target = Modifier.isStatic(field.getModifiers()) ? field.getDeclaringClass() : target;
         final long fieldOffset = Modifier.isStatic(field.getModifiers()) ? unsafe.staticFieldOffset(field)
                 : unsafe.objectFieldOffset(field);
@@ -282,7 +274,7 @@ public class ReflectionDriver implements Closeable {
         }
     }
 
-    public void setFieldValue(Object target, final Field field, final Object value) {
+    public static void setFieldValue(Object target, final Field field, final Object value) {
         if (value != null && !isAssignableFrom(field.getType(), value.getClass())) {
             throw new RuntimeException("Value " + value + " is not assignable to " + field.getName());
         }
@@ -341,25 +333,6 @@ public class ReflectionDriver implements Closeable {
         }
     }
 
-    @Override
-    public void close() {
-        loadedPackagesMapMemoryOffset = null;
-        loadedClassesVectorMemoryOffset = null;
-        unsafe = null;
-        illegalAccessLoggerEnabler = null;
-        illegalAccessLoggerDisabler = null;
-        getDeclaredFieldsRetriever = null;
-        getDeclaredMethodsRetriever = null;
-        getDeclaredConstructorsRetriever = null;
-        packageRetriever = null;
-        methodInvoker = null;
-        constructorInvoker = null;
-        accessibleSetter = null;
-        consulterRetriever = null;
-        classLoaderDelegateClass = null;
-        builtinClassLoaderClass = null;
-    }
-
     private static byte[] readAllBytes(final InputStream inputStream) throws IOException {
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         final byte[] data = new byte[4];
@@ -396,15 +369,12 @@ public class ReflectionDriver implements Closeable {
         return cls;
     }
 
-    private abstract static class Initializer implements AutoCloseable {
-        ReflectionDriver driver;
-
-        private Initializer(final ReflectionDriver driver) {
-            this.driver = driver;
+    private static abstract class Initializer {
+        private Initializer() {
             try {
                 final Field theUnsafeField = Unsafe.class.getDeclaredField("theUnsafe");
                 theUnsafeField.setAccessible(true);
-                this.driver.unsafe = (Unsafe) theUnsafeField.get(null);
+                ReflectionDriver.unsafe = (Unsafe) theUnsafeField.get(null);
             } catch (final Throwable exc) {
                 logger.log(Level.INFO, "Exception while retrieving unsafe");
                 throw new RuntimeException(exc);
@@ -434,8 +404,8 @@ public class ReflectionDriver implements Closeable {
 
         private void initPackagesMapField() {
             try {
-                this.driver.loadedPackagesMapMemoryOffset = driver.unsafe
-                        .objectFieldOffset(this.driver.getDeclaredField(ClassLoader.class, "packages"));
+                ReflectionDriver.loadedPackagesMapMemoryOffset = ReflectionDriver.unsafe
+                        .objectFieldOffset(ReflectionDriver.getDeclaredField(ClassLoader.class, "packages"));
             } catch (final Throwable exc) {
                 logger.log(Level.SEVERE, "Could not initialize field memory offset of loaded classes vector");
                 throw new RuntimeException(exc);
@@ -444,32 +414,29 @@ public class ReflectionDriver implements Closeable {
 
         private void initClassesVectorField() {
             try {
-                this.driver.loadedClassesVectorMemoryOffset = driver.unsafe
-                        .objectFieldOffset(this.driver.getDeclaredField(ClassLoader.class, "classes"));
+                ReflectionDriver.loadedClassesVectorMemoryOffset = ReflectionDriver.unsafe
+                        .objectFieldOffset(ReflectionDriver.getDeclaredField(ClassLoader.class, "classes"));
             } catch (final Throwable exc) {
                 logger.log(Level.SEVERE, "Could not initialize field memory offset of packages map");
                 throw new RuntimeException(exc);
             }
         }
 
-        private static void build(final ReflectionDriver driver) {
-            try (Initializer initializer = jvmMajorVersion > 8
-                    ? jvmMajorVersion > 13 ? new ForJava14(driver) : new ForJava9(driver)
-                    : new ForJava8(driver)) {
-                initializer.init();
-            }
+        private static void build() {
+            (jvmMajorVersion <= 8 ? new ForJava8() : jvmMajorVersion <= 13 ? new ForJava9() : new ForJava14())
+                    .init();
         }
 
         private void initMembersRetrievers() {
             try {
-                final MethodHandles.Lookup consulter = driver.getConsulter(Class.class);
-                driver.getDeclaredFieldsRetriever = consulter.findSpecial(Class.class, "getDeclaredFields0",
-                        MethodType.methodType(Field[].class, boolean.class), Class.class);
+                final MethodHandles.Lookup consulter = ReflectionDriver.getConsulter(Class.class);
+                ReflectionDriver.getDeclaredFieldsRetriever = consulter.findSpecial(Class.class,
+                        "getDeclaredFields0", MethodType.methodType(Field[].class, boolean.class), Class.class);
 
-                driver.getDeclaredMethodsRetriever = consulter.findSpecial(Class.class, "getDeclaredMethods0",
-                        MethodType.methodType(Method[].class, boolean.class), Class.class);
+                ReflectionDriver.getDeclaredMethodsRetriever = consulter.findSpecial(Class.class,
+                        "getDeclaredMethods0", MethodType.methodType(Method[].class, boolean.class), Class.class);
 
-                driver.getDeclaredConstructorsRetriever = consulter.findSpecial(Class.class,
+                ReflectionDriver.getDeclaredConstructorsRetriever = consulter.findSpecial(Class.class,
                         "getDeclaredConstructors0", MethodType.methodType(Constructor[].class, boolean.class),
                         Class.class);
             } catch (final Throwable exc) {
@@ -477,22 +444,13 @@ public class ReflectionDriver implements Closeable {
             }
         }
 
-        @Override
-        public void close() {
-            this.driver = null;
-        }
-
         private static class ForJava8 extends Initializer {
-            private ForJava8(final ReflectionDriver driver) {
-                super(driver);
-            }
-
             @Override
             void initConsulterRetriever() {
                 try {
                     final Field modes = MethodHandles.Lookup.class.getDeclaredField("allowedModes");
                     modes.setAccessible(true);
-                    driver.consulterRetriever = new Function<Class<?>, Lookup>() {
+                    ReflectionDriver.consulterRetriever = new Function<Class<?>, Lookup>() {
                         @Override
                         public Lookup apply(final Class<?> cls) {
                             final MethodHandles.Lookup consulter = MethodHandles.lookup().in(cls);
@@ -515,9 +473,9 @@ public class ReflectionDriver implements Closeable {
                 try {
                     final Method accessibleSetterMethod = AccessibleObject.class.getDeclaredMethod("setAccessible0",
                             AccessibleObject.class, boolean.class);
-                    final MethodHandle accessibleSetterMethodHandle = driver.getConsulter(AccessibleObject.class)
-                            .unreflect(accessibleSetterMethod);
-                    driver.accessibleSetter = new BiConsumer<AccessibleObject, Boolean>() {
+                    final MethodHandle accessibleSetterMethodHandle = ReflectionDriver
+                            .getConsulter(AccessibleObject.class).unreflect(accessibleSetterMethod);
+                    ReflectionDriver.accessibleSetter = new BiConsumer<AccessibleObject, Boolean>() {
                         @Override
                         public void accept(final AccessibleObject accessibleObject, final Boolean flag) {
                             try {
@@ -540,8 +498,8 @@ public class ReflectionDriver implements Closeable {
                             .forName("sun.reflect.NativeConstructorAccessorImpl");
                     final Method method = nativeAccessorImplClass.getDeclaredMethod("newInstance0",
                             Constructor.class, Object[].class);
-                    final MethodHandles.Lookup consulter = driver.getConsulter(nativeAccessorImplClass);
-                    driver.constructorInvoker = consulter.unreflect(method);
+                    final MethodHandles.Lookup consulter = ReflectionDriver.getConsulter(nativeAccessorImplClass);
+                    ReflectionDriver.constructorInvoker = consulter.unreflect(method);
                 } catch (final Throwable exc) {
                     logger.log(Level.SEVERE, "Could not initialize constructor invoker");
                     throw new RuntimeException(exc);
@@ -554,8 +512,8 @@ public class ReflectionDriver implements Closeable {
                     final Class<?> nativeAccessorImplClass = Class.forName("sun.reflect.NativeMethodAccessorImpl");
                     final Method method = nativeAccessorImplClass.getDeclaredMethod("invoke0", Method.class,
                             Object.class, Object[].class);
-                    final MethodHandles.Lookup consulter = driver.getConsulter(nativeAccessorImplClass);
-                    driver.methodInvoker = consulter.unreflect(method);
+                    final MethodHandles.Lookup consulter = ReflectionDriver.getConsulter(nativeAccessorImplClass);
+                    ReflectionDriver.methodInvoker = consulter.unreflect(method);
                 } catch (final Throwable exc) {
                     logger.log(Level.SEVERE, "Could not initialize method invoker");
                     throw new RuntimeException(exc);
@@ -564,7 +522,7 @@ public class ReflectionDriver implements Closeable {
 
             @Override
             void initSpecificElements() {
-                driver.packageRetriever = new TriFunction<ClassLoader, Object, String, Package>() {
+                ReflectionDriver.packageRetriever = new TriFunction<ClassLoader, Object, String, Package>() {
                     @Override
                     public Package apply(final ClassLoader classLoader, final Object object,
                             final String packageName) {
@@ -576,26 +534,26 @@ public class ReflectionDriver implements Closeable {
         }
 
         private static class ForJava9 extends Initializer {
-            ForJava9(final ReflectionDriver driver) {
-                super(driver);
+            ForJava9() {
                 try {
                     final Class<?> cls = Class.forName("jdk.internal.module.IllegalAccessLogger");
                     final Field logger = cls.getDeclaredField("logger");
-                    final long loggerFieldOffset = driver.unsafe.staticFieldOffset(logger);
-                    final Object illegalAccessLogger = driver.unsafe.getObjectVolatile(cls, loggerFieldOffset);
-                    driver.illegalAccessLoggerDisabler = new Runnable() {
+                    final long loggerFieldOffset = ReflectionDriver.unsafe.staticFieldOffset(logger);
+                    final Object illegalAccessLogger = ReflectionDriver.unsafe.getObjectVolatile(cls,
+                            loggerFieldOffset);
+                    ReflectionDriver.illegalAccessLoggerDisabler = new Runnable() {
                         @Override
                         public void run() {
-                            driver.unsafe.putObjectVolatile(cls, loggerFieldOffset, null);
+                            ReflectionDriver.unsafe.putObjectVolatile(cls, loggerFieldOffset, null);
                         }
                     };
-                    driver.illegalAccessLoggerEnabler = new Runnable() {
+                    ReflectionDriver.illegalAccessLoggerEnabler = new Runnable() {
                         @Override
                         public void run() {
-                            driver.unsafe.putObjectVolatile(cls, loggerFieldOffset, illegalAccessLogger);
+                            ReflectionDriver.unsafe.putObjectVolatile(cls, loggerFieldOffset, illegalAccessLogger);
                         }
                     };
-                    driver.disableIllegalAccessLogger();
+                    ReflectionDriver.disableIllegalAccessLogger();
                 } catch (final Throwable e) {
 
                 }
@@ -606,15 +564,18 @@ public class ReflectionDriver implements Closeable {
                 try (InputStream inputStream = ReflectionDriver.class.getClassLoader()
                         .getResourceAsStream(this.getClass().getPackage().getName().replace(".", "/")
                                 + "/ConsulterRetrieverForJDK9.bwc")) {
-                    final Class<?> methodHandleWrapperClass = driver.defineAnonymousClass(Class.class,
+                    final Class<?> methodHandleWrapperClass = ReflectionDriver.defineAnonymousClass(Class.class,
                             readAllBytes(inputStream), null);
                     final MethodHandles.Lookup consulter = MethodHandles.lookup();
                     final MethodHandle methodHandle = consulter.findStatic(MethodHandles.class, "privateLookupIn",
                             MethodType.methodType(MethodHandles.Lookup.class, Class.class,
                                     MethodHandles.Lookup.class));
-                    driver.unsafe.putObject(methodHandleWrapperClass, driver.unsafe.staticFieldOffset(
-                            methodHandleWrapperClass.getDeclaredField("consulterRetriever")), methodHandle);
-                    driver.consulterRetriever = (Function<Class<?>, MethodHandles.Lookup>) driver.unsafe
+                    ReflectionDriver.unsafe
+                            .putObject(methodHandleWrapperClass,
+                                    ReflectionDriver.unsafe.staticFieldOffset(
+                                            methodHandleWrapperClass.getDeclaredField("consulterRetriever")),
+                                    methodHandle);
+                    ReflectionDriver.consulterRetriever = (Function<Class<?>, MethodHandles.Lookup>) ReflectionDriver.unsafe
                             .allocateInstance(methodHandleWrapperClass);
                 } catch (final Throwable exc) {
                     logger.log(Level.SEVERE, "Could not initialize consulter retriever");
@@ -628,13 +589,13 @@ public class ReflectionDriver implements Closeable {
                 try (InputStream inputStream = ReflectionDriver.class.getClassLoader()
                         .getResourceAsStream(this.getClass().getPackage().getName().replace(".", "/")
                                 + "/AccessibleSetterInvokerForJDK9.bwc");) {
-                    final Class<?> methodHandleWrapperClass = driver.defineAnonymousClass(AccessibleObject.class,
-                            readAllBytes(inputStream), null);
-                    driver.unsafe.putObject(methodHandleWrapperClass,
-                            driver.unsafe.staticFieldOffset(
+                    final Class<?> methodHandleWrapperClass = ReflectionDriver
+                            .defineAnonymousClass(AccessibleObject.class, readAllBytes(inputStream), null);
+                    ReflectionDriver.unsafe.putObject(methodHandleWrapperClass,
+                            ReflectionDriver.unsafe.staticFieldOffset(
                                     methodHandleWrapperClass.getDeclaredField("methodHandleRetriever")),
-                            driver.getConsulter(methodHandleWrapperClass));
-                    driver.accessibleSetter = (BiConsumer<AccessibleObject, Boolean>) driver.unsafe
+                            ReflectionDriver.getConsulter(methodHandleWrapperClass));
+                    ReflectionDriver.accessibleSetter = (BiConsumer<AccessibleObject, Boolean>) ReflectionDriver.unsafe
                             .allocateInstance(methodHandleWrapperClass);
                 } catch (final Throwable exc) {
                     logger.log(Level.SEVERE, "Could not initialize accessible setter");
@@ -649,8 +610,8 @@ public class ReflectionDriver implements Closeable {
                             .forName("jdk.internal.reflect.NativeConstructorAccessorImpl");
                     final Method method = nativeAccessorImplClass.getDeclaredMethod("newInstance0",
                             Constructor.class, Object[].class);
-                    final MethodHandles.Lookup consulter = driver.getConsulter(nativeAccessorImplClass);
-                    driver.constructorInvoker = consulter.unreflect(method);
+                    final MethodHandles.Lookup consulter = ReflectionDriver.getConsulter(nativeAccessorImplClass);
+                    ReflectionDriver.constructorInvoker = consulter.unreflect(method);
                 } catch (final Throwable exc) {
                     logger.log(Level.SEVERE, "Could not initialize constructor invoker");
                     throw new RuntimeException(exc);
@@ -664,8 +625,9 @@ public class ReflectionDriver implements Closeable {
                             .forName("jdk.internal.reflect.NativeMethodAccessorImpl");
                     final Method invoker = nativeMethodAccessorImplClass.getDeclaredMethod("invoke0", Method.class,
                             Object.class, Object[].class);
-                    final MethodHandles.Lookup consulter = driver.getConsulter(nativeMethodAccessorImplClass);
-                    driver.methodInvoker = consulter.unreflect(invoker);
+                    final MethodHandles.Lookup consulter = ReflectionDriver
+                            .getConsulter(nativeMethodAccessorImplClass);
+                    ReflectionDriver.methodInvoker = consulter.unreflect(invoker);
                 } catch (final Throwable exc) {
                     logger.log(Level.SEVERE, "Could not initialize method invoker");
                     throw new RuntimeException(exc);
@@ -675,12 +637,12 @@ public class ReflectionDriver implements Closeable {
             @Override
             void initSpecificElements() {
                 try {
-                    final MethodHandles.Lookup classLoaderConsulter = driver.consulterRetriever
+                    final MethodHandles.Lookup classLoaderConsulter = ReflectionDriver.consulterRetriever
                             .apply(ClassLoader.class);
                     final MethodType methodType = MethodType.methodType(Package.class, String.class);
                     final MethodHandle methodHandle = classLoaderConsulter.findSpecial(ClassLoader.class,
                             "getDefinedPackage", methodType, ClassLoader.class);
-                    driver.packageRetriever = new TriFunction<ClassLoader, Object, String, Package>() {
+                    ReflectionDriver.packageRetriever = new TriFunction<ClassLoader, Object, String, Package>() {
                         @Override
                         public Package apply(final ClassLoader classLoader, final Object object,
                                 final String packageName) {
@@ -696,7 +658,8 @@ public class ReflectionDriver implements Closeable {
                     throw new RuntimeException(exc);
                 }
                 try {
-                    driver.builtinClassLoaderClass = Class.forName("jdk.internal.loader.BuiltinClassLoader");
+                    ReflectionDriver.builtinClassLoaderClass = Class
+                            .forName("jdk.internal.loader.BuiltinClassLoader");
                 } catch (final Throwable exc) {
                     logger.log(Level.SEVERE, "Could not initialize builtin class loader class");
                     throw new RuntimeException(exc);
@@ -704,8 +667,8 @@ public class ReflectionDriver implements Closeable {
                 try (InputStream inputStream = ReflectionDriver.class.getClassLoader()
                         .getResourceAsStream(this.getClass().getPackage().getName().replace('.', '/')
                                 + "/ClassLoaderDelegateForJDK9.bwc")) {
-                    driver.classLoaderDelegateClass = driver.defineAnonymousClass(driver.builtinClassLoaderClass,
-                            readAllBytes(inputStream), null);
+                    ReflectionDriver.classLoaderDelegateClass = ReflectionDriver.defineAnonymousClass(
+                            ReflectionDriver.builtinClassLoaderClass, readAllBytes(inputStream), null);
                 } catch (final Throwable exc) {
                     logger.log(Level.SEVERE, "Could not initialize class loader delegate class");
                     throw new RuntimeException(exc);
@@ -721,15 +684,15 @@ public class ReflectionDriver implements Closeable {
             void initDeepConsulterRetriever() throws Throwable {
                 final Constructor<MethodHandles.Lookup> lookupCtor = MethodHandles.Lookup.class
                         .getDeclaredConstructor(Class.class, int.class);
-                driver.setAccessible(lookupCtor, true);
+                ReflectionDriver.setAccessible(lookupCtor, true);
                 final Field fullPowerModeConstant = MethodHandles.Lookup.class.getDeclaredField("FULL_POWER_MODES");
-                driver.setAccessible(fullPowerModeConstant, true);
+                ReflectionDriver.setAccessible(fullPowerModeConstant, true);
                 final int fullPowerModeConstantValue = fullPowerModeConstant.getInt(null);
                 final MethodHandle methodHandle = lookupCtor
                         .newInstance(MethodHandles.Lookup.class, fullPowerModeConstantValue)
                         .findConstructor(MethodHandles.Lookup.class,
                                 MethodType.methodType(void.class, Class.class, int.class));
-                driver.consulterRetriever = new Function<Class<?>, Lookup>() {
+                ReflectionDriver.consulterRetriever = new Function<Class<?>, Lookup>() {
                     @Override
                     public Lookup apply(final Class<?> cls) {
                         try {
@@ -740,32 +703,22 @@ public class ReflectionDriver implements Closeable {
                     }
                 };
             }
-
-            @Override
-            public void close() {
-                super.close();
-            }
-
         }
 
         private static class ForJava14 extends ForJava9 {
-            ForJava14(final ReflectionDriver driver) {
-                super(driver);
-            }
-
             @Override
             void initDeepConsulterRetriever() throws Throwable {
                 final Constructor<?> lookupCtor = MethodHandles.Lookup.class.getDeclaredConstructor(Class.class,
                         Class.class, int.class);
-                driver.setAccessible(lookupCtor, true);
+                ReflectionDriver.setAccessible(lookupCtor, true);
                 final Field fullPowerModeConstant = MethodHandles.Lookup.class.getDeclaredField("FULL_POWER_MODES");
-                driver.setAccessible(fullPowerModeConstant, true);
+                ReflectionDriver.setAccessible(fullPowerModeConstant, true);
                 final int fullPowerModeConstantValue = fullPowerModeConstant.getInt(null);
                 final MethodHandle mthHandle = ((MethodHandles.Lookup) lookupCtor
                         .newInstance(MethodHandles.Lookup.class, null, fullPowerModeConstantValue)).findConstructor(
                                 MethodHandles.Lookup.class,
                                 MethodType.methodType(void.class, Class.class, Class.class, int.class));
-                driver.consulterRetriever = new Function<Class<?>, Lookup>() {
+                ReflectionDriver.consulterRetriever = new Function<Class<?>, Lookup>() {
                     @Override
                     public Lookup apply(final Class<?> cls) {
                         try {
@@ -777,7 +730,5 @@ public class ReflectionDriver implements Closeable {
                 };
             }
         }
-
     }
-
 }
