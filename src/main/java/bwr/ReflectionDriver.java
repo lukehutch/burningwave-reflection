@@ -76,9 +76,18 @@ public class ReflectionDriver {
 
     private static final Logger logger = Logger.getLogger(ReflectionDriver.class.getName());
 
-    private static final int jvmMajorVersion;
-
     static {
+        // Get Unsafe instance
+        try {
+            final Field theUnsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+            theUnsafeField.setAccessible(true);
+            ReflectionDriver.unsafe = (Unsafe) theUnsafeField.get(null);
+        } catch (final Throwable exc) {
+            logger.log(Level.INFO, "Exception while retrieving unsafe");
+            throw new RuntimeException(exc);
+        }
+
+        // Get Java major version
         String jvmVersionStr = System.getProperty("java.version");
         int startIdx = 0;
         while (startIdx < jvmVersionStr.length() && !Character.isDigit(jvmVersionStr.charAt(startIdx))) {
@@ -94,15 +103,21 @@ public class ReflectionDriver {
         while (endIdx < jvmVersionStr.length() && Character.isDigit(jvmVersionStr.charAt(endIdx))) {
             endIdx++;
         }
-        int majorVersion = 0;
+        int jvmMajorVersion = 0;
         try {
-            majorVersion = Integer.parseInt(jvmVersionStr.substring(0, endIdx));
+            jvmMajorVersion = Integer.parseInt(jvmVersionStr.substring(0, endIdx));
         } catch (final NumberFormatException e) {
             // Ignore
         }
-        jvmMajorVersion = majorVersion;
 
-        Initializer.build();
+        // Init static fields
+        if (jvmMajorVersion <= 8) {
+            new Initializer.ForJava8().init();
+        } else if (jvmMajorVersion <= 13) {
+            new Initializer.ForJava9().init();
+        } else {
+            new Initializer.ForJava14().init();
+        }
     }
 
     @FunctionalInterface
@@ -370,17 +385,6 @@ public class ReflectionDriver {
     }
 
     private static abstract class Initializer {
-        private Initializer() {
-            try {
-                final Field theUnsafeField = Unsafe.class.getDeclaredField("theUnsafe");
-                theUnsafeField.setAccessible(true);
-                ReflectionDriver.unsafe = (Unsafe) theUnsafeField.get(null);
-            } catch (final Throwable exc) {
-                logger.log(Level.INFO, "Exception while retrieving unsafe");
-                throw new RuntimeException(exc);
-            }
-        }
-
         void init() {
             initConsulterRetriever();
             initMembersRetrievers();
@@ -420,11 +424,6 @@ public class ReflectionDriver {
                 logger.log(Level.SEVERE, "Could not initialize field memory offset of packages map");
                 throw new RuntimeException(exc);
             }
-        }
-
-        private static void build() {
-            (jvmMajorVersion <= 8 ? new ForJava8() : jvmMajorVersion <= 13 ? new ForJava9() : new ForJava14())
-                    .init();
         }
 
         private void initMembersRetrievers() {
@@ -714,7 +713,7 @@ public class ReflectionDriver {
                 final Field fullPowerModeConstant = MethodHandles.Lookup.class.getDeclaredField("FULL_POWER_MODES");
                 ReflectionDriver.setAccessible(fullPowerModeConstant, true);
                 final int fullPowerModeConstantValue = fullPowerModeConstant.getInt(null);
-                final MethodHandle mthHandle = ((MethodHandles.Lookup) lookupCtor
+                final MethodHandle methodHandle = ((MethodHandles.Lookup) lookupCtor
                         .newInstance(MethodHandles.Lookup.class, null, fullPowerModeConstantValue)).findConstructor(
                                 MethodHandles.Lookup.class,
                                 MethodType.methodType(void.class, Class.class, Class.class, int.class));
@@ -722,7 +721,8 @@ public class ReflectionDriver {
                     @Override
                     public Lookup apply(final Class<?> cls) {
                         try {
-                            return (MethodHandles.Lookup) mthHandle.invoke(cls, null, fullPowerModeConstantValue);
+                            return (MethodHandles.Lookup) methodHandle.invoke(cls, null,
+                                    fullPowerModeConstantValue);
                         } catch (final Throwable exc) {
                             throw new RuntimeException(exc);
                         }
